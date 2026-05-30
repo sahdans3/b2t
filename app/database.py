@@ -2,19 +2,18 @@ import mysql.connector
 from app.config import DB_CONFIG
 
 def connect_db():
-    return mysql.connector.connect(**DB_CONFIG)
+    return mysql.connector.connect(
+        host="127.0.0.1",   # FIX ERROR PIPE
+        user="root",
+        password="",
+        database="anonymous_chat",
+        port=3306
+    )
 
 # ================= USER =================
 def register_user(user_id):
     db = connect_db()
     cursor = db.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            searching TINYINT DEFAULT 0,
-            partner_id BIGINT DEFAULT NULL
-        )
-    """)
     cursor.execute("""
         INSERT IGNORE INTO users (user_id) VALUES (%s)
     """, (user_id,))
