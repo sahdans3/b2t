@@ -1,14 +1,13 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from telegram.error import Forbidden
+from telegram.error import Forbidden, BadRequest
 
 from app.database import (
     register_user, set_searching, find_partner,
-    stop_chat, get_partner, save_feedback, connect_db
+    stop_chat, get_partner
 )
 from app.keyboards import feedback_keyboard
 
-# ================= CONSTANT MESSAGE =================
 PARTNER_FOUND_MESSAGE = (
     "Partner found 😺\n\n"
     "/next — find a new partner\n"
@@ -16,20 +15,25 @@ PARTNER_FOUND_MESSAGE = (
     "https://t.me/Annonymous_Chat_Bot"
 )
 
-# ================= COMMAND =================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user.id)
-    await update.message.reply_text(PARTNER_FOUND_MESSAGE)
+    await update.message.reply_text(
+        "👋 Welcome!\n\nType /search to find a partner."
+    )
 
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+
     register_user(user_id)
     set_searching(user_id, 1)
 
     partner = find_partner(user_id)
+
     if partner:
         await update.message.reply_text(PARTNER_FOUND_MESSAGE)
+
         try:
             await context.bot.send_message(
                 chat_id=partner["user_id"],
@@ -49,23 +53,19 @@ async def next_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=partner_id,
-                text="Your partner has stopped the chat 😞\nType /search",
-                reply_markup=feedback_keyboard()
+                text="Your partner has left the chat 😞"
             )
         except Forbidden:
-            stop_chat(partner_id)
-
-        await update.message.reply_text(
-            "Leave feedback 👇",
-            reply_markup=feedback_keyboard(normal=False)
-        )
+            pass
 
     set_searching(user_id, 1)
-    await update.message.reply_text("Looking for a new partner...")
+    await update.message.reply_text("🔍 Looking for a new partner...")
 
     partner = find_partner(user_id)
+
     if partner:
         await update.message.reply_text(PARTNER_FOUND_MESSAGE)
+
         try:
             await context.bot.send_message(
                 chat_id=partner["user_id"],
@@ -80,22 +80,26 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     partner_id = stop_chat(user_id)
 
     if not partner_id:
-        await update.message.reply_text("Kamu tidak sedang dalam chat.")
+        await update.message.reply_text("❌ You are not in a chat.")
         return
 
-    for uid in (user_id, partner_id):
-        try:
-            await context.bot.send_message(
-                chat_id=uid,
-                text="Chat ended 😞",
-                reply_markup=feedback_keyboard()
-            )
-        except Forbidden:
-            stop_chat(uid)
+    try:
+        await context.bot.send_message(
+            chat_id=partner_id,
+            text="😞 Your partner has ended the chat."
+        )
+    except Forbidden:
+        pass
+
+    await update.message.reply_text(
+        "Chat ended 😞",
+        reply_markup=feedback_keyboard()
+    )
 
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     partner_id = get_partner(update.effective_user.id)
+
     if not partner_id:
         return
 
@@ -108,26 +112,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stop_chat(partner_id)
 
 
-# ================= CALLBACK =================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
 
-    user_id = query.from_user.id
-    feedback = query.data.replace("_next", "")
+    try:
+        await query.answer()
+    except BadRequest:
+        return
 
-    db = connect_db()
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT partner_id FROM feedback_temp WHERE user_id=%s",
-        (user_id,)
-    )
-    row = cursor.fetchone()
-    cursor.close()
-    db.close()
-
-    if row:
-        save_feedback(user_id, row[0], feedback)
-        await query.edit_message_text("✅ Feedback saved")
-    else:
-        await query.edit_message_text("⚠️ Feedback expired")
+    await query.edit_message_text("✅ Feedback saved")

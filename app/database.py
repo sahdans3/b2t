@@ -2,13 +2,7 @@ import mysql.connector
 from app.config import DB_CONFIG
 
 def connect_db():
-    return mysql.connector.connect(
-        host="127.0.0.1",   # FIX ERROR PIPE
-        user="root",
-        password="",
-        database="anonymous_chat",
-        port=3306
-    )
+    return mysql.connector.connect(**DB_CONFIG)
 
 # ================= USER =================
 def register_user(user_id):
